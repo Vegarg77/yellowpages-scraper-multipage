@@ -8,35 +8,37 @@ from lxml import html
 import csv
 from urllib.parse import urljoin
 
+
 def parse_listing(keyword, place):
     base_url = "https://www.yellowpages.com"
-    url = "{}/search?search_terms={}&geo_location_terms={}".format(base_url, keyword, place)
     ua = fake_useragent.UserAgent()
     headers = {'User-Agent': ua.random}
 
     all_scraped_results = []
-    while url:
-        print("retrieving ", url)
-        response = requests.get(url, verify=True, headers=headers)
-        if response.status_code == 200:
-            parser = html.fromstring(response.text)
-            parser.make_links_absolute(base_url)
-            # Process the page as before, adding results to all_scraped_results
-            scraped_results = process_page(parser, response)
-            all_scraped_results += scraped_results
-            # Find the next page
-            next_page = parser.xpath("//a[@class='next ajax-page']/@href")
-            if next_page:
-                url = urljoin(base_url, next_page[0])
-                time.sleep(2)  # Respectful crawling by sleeping between requests
+    for key in keyword:
+        url = "{}/search?search_terms={}&geo_location_terms={}".format(base_url, key, place)
+        while url:
+            print("retrieving ", url)
+            response = requests.get(url, verify=True, headers=headers)
+            if response.status_code == 200:
+                parser = html.fromstring(response.text)
+                parser.make_links_absolute(base_url)
+                # Process the page as before, adding results to all_scraped_results
+                scraped_results = process_page(parser, response)
+                all_scraped_results += scraped_results
+                # Find the next page
+                next_page = parser.xpath("//a[@class='next ajax-page']/@href")
+                if next_page:
+                    url = urljoin(base_url, next_page[0])
+                    time.sleep(2)  # Respectful crawling by sleeping between requests
+                else:
+                    url = None
+            elif response.status_code == 404:
+                print("Could not find a location matching", place)
+                break
             else:
-                url = None
-        elif response.status_code == 404:
-            print("Could not find a location matching", place)
-            break
-        else:
-            print("Failed to process page")
-            break
+                print("Failed to process page")
+                break
     return all_scraped_results
 
 
@@ -103,18 +105,23 @@ def process_page(parser, response):
 
 
 if __name__ == "__main__":
+    keyword_input = input('Enter the search keywords separated by comma: ')
+    keywords = keyword_input.split(',')
 
-    keyword = input('Enter the search keyword: ')
     place = input('Enter the place name: ')
 
-    scraped_data = parse_listing(keyword, place)
+    scraped_data = parse_listing(keywords, place)
 
     if scraped_data:
-        print(f"Writing scraped data to {keyword}-{place}-yellowpages-scraped-data.csv")
-        with open(f'{keyword}-{place}-yellowpages-scraped-data.csv', 'w', newline='') as csvfile:
+        filename = f'{place}-yellowpages-scraped-data.csv'
+        print(f"Writing scraped data to {filename}")
+        with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
             fieldnames = ['rank', 'business_name', 'telephone', 'business_page', 'category', 'website', 'rating',
                           'street', 'locality', 'region', 'zipcode', 'listing_url']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames, quoting=csv.QUOTE_ALL)
             writer.writeheader()
             for data in scraped_data:
                 writer.writerow(data)
+        print("Scraping completed and data saved to the CSV file.")
+    else:
+        print("No data scraped.")
