@@ -7,6 +7,7 @@ import requests
 from lxml import html
 import csv
 from urllib.parse import urljoin
+from datetime import datetime
 
 
 def parse_listing(keyword, place):
@@ -104,6 +105,22 @@ def process_page(parser, response):
     return scraped_results
 
 
+def remove_duplicates(data):
+    business_name_set = set()
+    unique_data = []
+    duplicates = []
+
+    for entry in data:
+        business_name = entry['business_name']
+        if business_name not in business_name_set:
+            unique_data.append(entry)
+            business_name_set.add(business_name)
+        else:
+            duplicates.append(entry)
+
+    return unique_data, duplicates
+
+
 if __name__ == "__main__":
     keyword_input = input('Enter the search keywords separated by comma: ')
     keywords = keyword_input.split(',')
@@ -113,7 +130,8 @@ if __name__ == "__main__":
     scraped_data = parse_listing(keywords, place)
 
     if scraped_data:
-        filename = f'{place}-yellowpages-scraped-data.csv'
+        current_time = datetime.now().strftime("%Y%m%d_%H%M")
+        filename = f"{place}_{current_time}.csv"
         print(f"Writing scraped data to {filename}")
         with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
             fieldnames = ['rank', 'business_name', 'telephone', 'business_page', 'category', 'website', 'rating',
@@ -123,5 +141,43 @@ if __name__ == "__main__":
             for data in scraped_data:
                 writer.writerow(data)
         print("Scraping completed and data saved to the CSV file.")
+
+        total_entries = len(scraped_data)
+        print(f"Total entries: {total_entries}")
+
+        duplicates_option = input("Do you want to remove duplicates? (y/n): ")
+        if duplicates_option.lower() in ('y', 'yes'):
+            unique_data, duplicates = remove_duplicates(scraped_data)
+
+            if duplicates:
+                duplicates_filename = f"duplicates_{current_time}.csv"
+                print(f"Writing duplicate entries to {duplicates_filename}")
+                with open(duplicates_filename, 'w', newline='', encoding='utf-8') as csvfile:
+                    writer = csv.DictWriter(csvfile, fieldnames=fieldnames, quoting=csv.QUOTE_ALL)
+                    writer.writeheader()
+                    for data in duplicates:
+                        writer.writerow(data)
+                print(f"Duplicate entries ({len(duplicates)}) saved to the CSV file.")
+
+                # Remove duplicates from the original scraped_data and update the CSV file
+                scraped_data = unique_data
+
+                # Rewrite the original CSV file with the unique entries
+                with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+                    writer = csv.DictWriter(csvfile, fieldnames=fieldnames, quoting=csv.QUOTE_ALL)
+                    writer.writeheader()
+                    for data in scraped_data:
+                        writer.writerow(data)
+
+                print("Duplicates removed from the original CSV file.")
+
+            if unique_data:
+                # Optional: Save unique_data to a separate CSV file if needed
+                pass
+        else:
+            unique_data = scraped_data
+
+        # Optional: Save unique_data to a separate CSV file if needed
+
     else:
         print("No data scraped.")
